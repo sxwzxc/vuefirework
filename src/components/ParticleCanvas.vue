@@ -25,6 +25,7 @@ const config = reactive({
   spiralSpeed: 0.1,
   spiralShrink: 0.986,
   spiralMinDist: 5,
+  spiralMinOrbitRadius: 60,
   spiralInfluenceRadius: 450,
   // 连线
   connectionDistance: 140,
@@ -383,7 +384,9 @@ function updateParticle(p: Particle, index: number) {
     
     // 椭圆轨道：使用偏心率让轨道变形
     const spiralAngle = angle + rotSpeed + p.orbitAngleOffset
-    let targetDist = Math.max(dist * config.spiralShrink, config.spiralMinDist)
+    // 最小轨道半径：粒子不会比这个距离更靠近鼠标
+    const minOrbit = config.spiralMinOrbitRadius + p.orbitEccentricity * config.spiralMinOrbitRadius * 0.3
+    let targetDist = Math.max(dist * config.spiralShrink, Math.max(config.spiralMinDist, minOrbit))
     
     // 椭圆变形：根据角度调整距离（模拟椭圆）
     const ellipseModulation = 1 + p.orbitEccentricity * Math.cos(spiralAngle * 2)
@@ -1182,6 +1185,10 @@ function applyPreset(preset: string) {
         <div class="control-row">
           <label>影响范围: {{ config.spiralInfluenceRadius }}</label>
           <input type="range" v-model.number="config.spiralInfluenceRadius" min="100" max="800" step="10" />
+        </div>
+        <div class="control-row">
+          <label>最小轨道半径: {{ config.spiralMinOrbitRadius }}</label>
+          <input type="range" v-model.number="config.spiralMinOrbitRadius" min="0" max="250" step="5" />
         </div>
       </div>
 
