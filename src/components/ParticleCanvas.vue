@@ -97,6 +97,12 @@ interface Particle {
   flickerTimer: number
   angle: number  // rotation angle for non-circle shapes
   angularVel: number
+  // 螺旋轨迹随机性
+  orbitEccentricity: number  // 椭圆偏心率 0-1
+  orbitAngleOffset: number   // 轨道角度偏移
+  orbitNoise: number         // 轨道噪声
+  wasInSpiral: boolean       // 是否刚从螺旋中释放
+  releaseTime: number        // 释放时间
 }
 
 interface Star {
@@ -196,6 +202,11 @@ function createParticle(w: number, h: number, layer: number = 1, overrides?: Par
     life: -1, maxLife: -1,
     isBurst: false,
     flickerTimer: Math.random() * 100,
+    orbitEccentricity: 0.2 + Math.random() * 0.6,
+    orbitAngleOffset: Math.random() * Math.PI * 2,
+    orbitNoise: 0.3 + Math.random() * 0.7,
+    wasInSpiral: false,
+    releaseTime: 0,
     angle: Math.random() * Math.PI * 2,
     angularVel: (Math.random() - 0.5) * 0.02,
     ...overrides,
@@ -225,6 +236,11 @@ function createBurstParticle(x: number, y: number): Particle {
     life, maxLife: life,
     isBurst: true,
     flickerTimer: 0,
+    orbitEccentricity: 0.3 + Math.random() * 0.5,
+    orbitAngleOffset: Math.random() * Math.PI * 2,
+    orbitNoise: 0.5 + Math.random() * 0.5,
+    wasInSpiral: false,
+    releaseTime: 0,
     angle: Math.random() * Math.PI * 2,
     angularVel: (Math.random() - 0.5) * 0.1,
   }
@@ -344,22 +360,54 @@ function updateParticle(p: Particle, index: number) {
   p.angle += p.angularVel
 
   if (mouse.isDown && !p.isBurst) {
-    // === 螺旋吸引 ===
+    // === 不规则螺旋吸引 ===
+    p.wasInSpiral = true
+    p.releaseTime = time
+    
     const dx = p.x - mouse.x
     const dy = p.y - mouse.y
     const dist = Math.sqrt(dx * dx + dy * dy)
     const angle = Math.atan2(dy, dx)
 
     const influence = Math.min(1, config.spiralInfluenceRadius / (dist + 1))
-    const rotSpeed = config.spiralSpeed * (1 + 100 / (dist + 15))
-    const spiralAngle = angle + rotSpeed
-    const targetDist = Math.max(dist * config.spiralShrink, config.spiralMinDist)
+    
+    // 动态旋转速度：距离越远旋转越慢（飞来时），距离越近旋转越快（螺旋时）
+    let rotSpeed: number
+    if (dist > config.spiralInfluenceRadius * 0.5) {
+      // 外围：较慢的螺旋接近
+      rotSpeed = config.spiralSpeed * 0.4 * (1 + 30 / (dist + 10))
+    } else {
+      // 内圈：快速螺旋
+      rotSpeed = config.spiralSpeed * (1 + 100 / (dist + 15))
+    }
+    
+    // 椭圆轨道：使用偏心率让轨道变形
+    const spiralAngle = angle + rotSpeed + p.orbitAngleOffset
+    let targetDist = Math.max(dist * config.spiralShrink, config.spiralMinDist)
+    
+    // 椭圆变形：根据角度调整距离（模拟椭圆）
+    const ellipseModulation = 1 + p.orbitEccentricity * Math.cos(spiralAngle * 2)
+    targetDist *= ellipseModulation
+    
+    // 添加噪声扰动：让轨迹不规则
+    const noiseX = Math.sin(time * 0.05 + p.pulseOffset) * p.orbitNoise * 15
+    const noiseY = Math.cos(time * 0.07 + p.pulseOffset * 1.3) * p.orbitNoise * 15
+    
+    // 随机甩出效果：偶尔给粒子一个向外的冲击
+    if (Math.random() < 0.008 && dist < config.spiralInfluenceRadius * 0.7) {
+      const flingAngle = angle + (Math.random() - 0.5) * 0.5
+      const flingForce = 2 + Math.random() * 3
+      p.vx += Math.cos(flingAngle) * flingForce
+      p.vy += Math.sin(flingAngle) * flingForce
+    }
 
-    const targetX = mouse.x + Math.cos(spiralAngle) * targetDist
-    const targetY = mouse.y + Math.sin(spiralAngle) * targetDist
+    const targetX = mouse.x + Math.cos(spiralAngle) * targetDist + noiseX
+    const targetY = mouse.y + Math.sin(spiralAngle) * targetDist + noiseY
 
-    p.vx += (targetX - p.x) * 0.06 * influence
-    p.vy += (targetY - p.y) * 0.06 * influence
+    // 外围粒子用较弱的吸引力，让螺旋接近更明显
+    const attractionStrength = dist > config.spiralInfluenceRadius * 0.5 ? 0.04 : 0.06
+    p.vx += (targetX - p.x) * attractionStrength * influence
+    p.vy += (targetY - p.y) * attractionStrength * influence
 
     // 螺旋彩虹变色
     if (config.enableColorShift) {
@@ -372,6 +420,34 @@ function updateParticle(p: Particle, index: number) {
     p.angularVel += (rotSpeed * 0.1 - p.angularVel) * 0.05
   } else if (!p.isBurst) {
     // === 自由漂浮 ===
+    
+    // 刚释放时快速散开
+    if (p.wasInSpiral) {
+      const timeSinceRelease = time - p.releaseTime
+      if (timeSinceRelease < 30) {
+        // 散开力度随时间衰减
+        const scatterStrength = (1 - timeSinceRelease / 30) * 0.8
+        const dx = p.x - mouse.x
+        const dy = p.y - mouse.y
+        const dist = Math.sqrt(dx * dx + dy * dy)
+        if (dist > 1) {
+          // 向外推力
+          const pushForce = scatterStrength * 8
+          p.vx += (dx / dist) * pushForce
+          p.vy += (dy / dist) * pushForce
+          
+          // 添加随机扰动让散开更自然
+          p.vx += (Math.random() - 0.5) * scatterStrength * 4
+          p.vy += (Math.random() - 0.5) * scatterStrength * 4
+        }
+      } else {
+        p.wasInSpiral = false
+        // 重新随机化基础速度
+        p.baseVx = (Math.random() - 0.5) * config.particleSpeed * 2
+        p.baseVy = (Math.random() - 0.5) * config.particleSpeed * 2
+      }
+    }
+    
     p.vx += (p.baseVx - p.vx) * 0.012
     p.vy += (p.baseVy - p.vy) * 0.012
 
