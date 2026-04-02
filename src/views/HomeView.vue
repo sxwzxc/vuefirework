@@ -6,8 +6,8 @@ import ParticleCanvas from '../components/ParticleCanvas.vue'
   <main>
     <ParticleCanvas />
     <div class="hint">
-      <p class="title">✨ 炫酷粒子</p>
-      <p class="desc">移动鼠标感受粒子跟随 · 点击或按住鼠标触发螺旋漩涡</p>
+      <p class="title">✨ 炫酷粒子宇宙</p>
+      <p class="desc">移动鼠标 · 点击爆裂 · 按住螺旋 · 右上角打开控制面板</p>
     </div>
   </main>
 </template>
@@ -32,23 +32,25 @@ main {
 }
 
 .title {
-  font-size: 1.1rem;
-  color: rgba(255, 255, 255, 0.5);
-  letter-spacing: 2px;
-  margin-bottom: 0.4rem;
-  text-shadow: 0 0 20px rgba(147, 51, 234, 0.3);
+  font-size: 1.2rem;
+  color: rgba(255, 255, 255, 0.55);
+  letter-spacing: 3px;
+  margin-bottom: 0.5rem;
+  text-shadow: 0 0 25px rgba(147, 51, 234, 0.4), 0 0 10px rgba(59, 130, 246, 0.3);
+  font-weight: 500;
 }
 
 .desc {
-  font-size: 0.8rem;
-  color: rgba(255, 255, 255, 0.3);
-  letter-spacing: 0.5px;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.35);
+  letter-spacing: 1px;
+  line-height: 1.6;
 }
 
 @keyframes fadeInUp {
   0% {
     opacity: 0;
-    transform: translateX(-50%) translateY(20px);
+    transform: translateX(-50%) translateY(30px);
   }
   100% {
     opacity: 1;
